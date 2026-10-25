@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CROSSFIRE VTT</title>
+  <link href="https://fonts.googleapis.com/css2?family=Rye&family=Special+Elite&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Rye&family=Special+Elite&display=swap');
+    
+    :root {
+      --paper-bg: #EAE0C8;
+      --paper-panel: #DDCBAA;
+      --ink-main: #2C1E16;
+      --ink-faded: #5C4A3D;
+      --stamp-red: #8B261A;
+      --sepia-border: #A38A66;
+      --sepia-dark: #8c7350;
+    }
+
+    body, html { margin: 0; padding: 0; height: 100vh; width: 100vw; overflow: hidden; background-color: #1a110c; font-family: 'Special Elite', monospace; color: var(--ink-main); }
+    
+    header { background-color: var(--ink-main); color: var(--paper-bg); padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid var(--stamp-red); height: 50px; flex-shrink: 0; box-sizing: border-box; }
+    header h1 { font-family: 'Rye', cursive; margin: 0; font-size: 24px; letter-spacing: 1px; }
+    
+    #vtt-view { display: flex; flex-direction: column; height: 100vh; }
+    
+    /* 🎯 FIX: Restored the proper 3-column layout structure */
+    .main { display: flex; flex: 1; overflow: hidden; }
+    
+    .sidebar { width: 300px; background-color: var(--paper-panel); border-right: 2px solid var(--sepia-dark); display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; }
+    .sidebar.right { border-right: none; border-left: 2px solid var(--sepia-dark); }
+    .sidebar-section { background-color: var(--sepia-dark); color: var(--paper-bg); padding: 8px 15px; font-family: 'Rye', cursive; font-size: 16px; position: sticky; top: 0; z-index: 10; margin-bottom: 10px;}
+    
+    /* 🎯 FIX: Center map area flex column */
+    .map-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+    
+    .map-toolbar { background-color: var(--paper-panel); border-bottom: 2px solid var(--sepia-dark); padding: 10px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; flex-shrink: 0; }
+    
+    /* 🎯 FIX: Canvas Wrapper allows infinite scrolling in all directions without expanding the page */
+    .canvas-wrapper { flex: 1; overflow: auto; padding: 20px; background-color: var(--paper-bg); background-image: linear-gradient(var(--sepia-border) 1px, transparent 1px), linear-gradient(90deg, var(--sepia-border) 1px, transparent 1px); background-size: 40px 40px; background-position: -1px -1px; cursor: crosshair; }
+    
+    canvas { box-shadow: 5px 5px 15px rgba(0,0,0,0.2); border: 2px solid var(--ink-main); display: block; margin: 0; }
+    
+    /* UI Elements */
+    .btn { font-family: 'Special Elite', monospace; font-weight: bold; background: transparent; border: 2px solid var(--ink-main); color: var(--ink-main); padding: 6px 12px; cursor: pointer; transition: all 0.1s; text-transform: uppercase; font-size: 12px; }
+    .btn:hover { background: var(--ink-main); color: var(--paper-bg); }
+    .btn.active { background: var(--ink-main); color: var(--paper-bg); }
+    
+    .btn-rust { border-color: var(--stamp-red); color: var(--stamp-red); }
+    .btn-rust:hover { background: var(--stamp-red); color: white; }
+    
+    .btn-gold { border-color: #c8972a; color: #9c731a; }
+    .btn-gold:hover { background: #c8972a; color: white; }
+    
+    .btn-sage { border-color: #4a5d23; color: #4a5d23; }
+    .btn-sage:hover { background: #4a5d23; color: white; }
+
+    .layer-toggle { display: flex; border: 2px solid var(--ink-main); border-radius: 2px; overflow: hidden; }
+    .layer-toggle button { border: none; padding: 6px 15px; font-family: 'Special Elite', monospace; font-weight: bold; cursor: pointer; background: transparent; color: var(--ink-main); }
+    .layer-toggle button.active { background: var(--ink-main); color: var(--paper-bg); }
+    
+    .terrain-palette { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; padding: 0 10px 10px; }
+    .terrain-tile { border: 2px solid var(--sepia-dark); height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; font-size: 10px; text-align: center; }
+    .terrain-tile.active { border-color: var(--stamp-red); outline: 2px solid var(--stamp-red); box-shadow: inset 0 0 10px rgba(0,0,0,0.5); }
+    .terrain-tile .sym { font-weight: bold; font-size: 14px; margin-bottom: 2px; text-shadow: 1px 1px 0px rgba(255,255,255,0.5); }
+    
+    .tool-btn { font-family: 'Special Elite', monospace; font-weight: bold; background: transparent; border: 2px solid var(--ink-main); color: var(--ink-main); padding: 8px; margin: 0 10px 5px; cursor: pointer; text-transform: uppercase; font-size: 12px; }
+    .tool-btn:hover, .tool-btn.active { background: var(--ink-main); color: var(--paper-bg); }
+
+    .info-row { display: flex; justify-content: space-between; padding: 5px 15px; font-family: 'Special Elite', monospace; font-size: 13px; }
+    .info-row span:last-child { font-weight: bold; }
+
+    /* Layout Modes */
+    body.mode-menu #vtt-view { display: none; }
+    body.mode-menu #main-menu-view { display: flex; height: 100vh; justify-content: center; align-items: center; background: var(--paper-bg); }
+    
+    body.mode-play #main-menu-view, body.mode-edit #main-menu-view { display: none; }
+    
+    body.mode-play .edit-only { display: none !important; }
+    body.mode-edit .play-only { display: none !important; }
+
+    .menu-box { text-align: center; border: 4px double var(--ink-main); padding: 40px; background: var(--paper-panel); box-shadow: 10px 10px 0px rgba(0,0,0,0.1); }
+    .menu-box h1 { font-family: 'Rye', cursive; font-size: 64px; margin: 0; color: var(--ink-main); }
+    .menu-box h1 span { color: var(--stamp-red); }
+    .menu-box p { font-family: 'Special Elite', monospace; letter-spacing: 4px; margin-top: 0; margin-bottom: 30px; font-weight: bold; }
+    .menu-btn { display: block; width: 100%; margin: 10px 0; padding: 15px; font-size: 18px; font-family: 'Special Elite', monospace; font-weight: bold; border: 2px solid var(--ink-main); background: transparent; cursor: pointer; transition: 0.2s; }
+    .menu-btn:hover { background: var(--ink-main); color: var(--paper-bg); }
+
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink-main); color: white; padding: 10px 20px; border-radius: 4px; font-family: 'Special Elite', monospace; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 1000; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+
+<body class="mode-menu">
+
+  <!-- ==================== MAIN MENU ==================== -->
+  <div id="main-menu-view">
+    <div class="menu-box">
+      <h1>CROSSFIRE<span>!</span></h1>
+      <p>VIRTUAL TABLETOP ENGINE</p>
+      
+      <button class="menu-btn" id="btn-menu-play">▶ Play a Game</button>
+      <button class="menu-btn" id="btn-menu-edit">✏️ Create / Edit Map</button>
+    </div>
+  </div>
+
+  <!-- ==================== VTT VIEW ==================== -->
+  <div id="vtt-view">
+    
+    <header>
+      <div style="display:flex; align-items:center; gap:20px;">
+        <h2>CROSSFIRE<span>!</span></h2>
+        <!-- Universal, now on the Left! -->
+        <button class="btn btn-sage" id="btn-game-designer">⚙️ Game Designer</button>
+      </div>
+      
+      <div class="header-actions" style="display:flex; gap:10px;">
+        <!-- Visible ONLY in Edit Mode -->
+        <button class="btn btn-gold edit-only" id="btn-load-map">📂 Load Map</button>
+        <button class="btn btn-gold edit-only" id="btn-save-map">💾 Save Map</button>
+        
+        <!-- Visible ONLY in Play Mode -->
+        <button class="btn btn-gold play-only" id="btn-new-round">♻️ New Round</button>
+        <button class="btn btn-rust play-only" id="btn-initiative">🎴 Draw Initiative</button>
+        
+        <!-- Universal -->
+        <button class="btn" id="btn-main-menu">↩ Main Menu</button>
+      </div>
+    </header>
+
+    <div class="main">
+      
+      <!-- ============================================== -->
+      <!-- LEFT SIDEBARS                                  -->
+      <!-- ============================================== -->
+
+      <!-- EDITOR TOOLS (Edit Mode Only) -->
+      <div class="sidebar edit-only">
+        <div class="sidebar-section">MAP TOOLS</div>
+        <button class="tool-btn active" id="tool-paint">✏ Paint</button>
+        <button class="tool-btn" id="tool-erase">✕ Erase</button>
+        <button class="tool-btn" id="tool-fill">▣ Fill</button>
+        <button class="tool-btn" id="tool-rect">▭ Rectangle</button>
+        <button class="tool-btn" id="tool-line">/ Line</button>
+        <div style="height: 2px; background: var(--sepia-border); margin: 8px 12px;"></div>
+        <div class="sidebar-section">TERRAIN</div>
+        <div class="terrain-palette" id="terrain-palette">
+          <!-- Populated dynamically by UI.js -->
+        </div>
+      </div>
+
+      <!-- GAME LOG (Play Mode Only) -->
+      <div class="sidebar play-only">
+        <div class="sidebar-section">THE DISPATCH (LOG)</div>
+        <div class="game-log-container" id="game-log" style="padding:15px; flex:1; overflow-y:auto; font-size:12px;">
+          <div style="color: var(--ink-faded); text-align: center; margin-top: 20px;">Waiting for action...</div>
+        </div>
+      </div>
+
+      <!-- ============================================== -->
+      <!-- CENTER: CANVAS & MAP TOOLBAR                   -->
+      <!-- ============================================== -->
+      <div class="map-area">
+        
+        <div class="map-toolbar">
+          <div class="layer-toggle">
+            <button class="active" id="layer-ground">GROUND</button>
+            <button id="layer-roof">ROOF</button>
+          </div>
+          
+          <!-- Size controls restricted to Edit mode -->
+          <label class="edit-only" style="font-size:12px; font-weight:bold;">W <input type="number" id="mapW" value="48" min="4" max="100" style="width:50px;"></label>
+          <label class="edit-only" style="font-size:12px; font-weight:bold;">H <input type="number" id="mapH" value="48" min="4" max="100" style="width:50px;"></label>
+          
+          <label style="font-size:12px; font-weight:bold;">Zoom <input type="range" id="zoomSlider" min="5" max="80" value="40" style="width:80px;"></label>
+          <label style="font-size:12px; font-weight:bold;"><input type="checkbox" id="showRoofOverlay"> Show roof overlay</label>
+        </div>
+
+        <div class="canvas-wrapper" id="canvasWrapper">
+           <!-- PixiJS Injects Here -->
+        </div>
+      </div>
+
+      <!-- ============================================== -->
+      <!-- RIGHT SIDEBARS                                 -->
+      <!-- ============================================== -->
+
+      <!-- MAP STATS (Edit Mode Only) -->
+      <div class="sidebar right edit-only">
+        <div class="sidebar-section">MAP STATS</div>
+        <div class="info-row"><span>Layer</span><span id="statLayer">Ground</span></div>
+        <div class="info-row"><span>Tool</span><span id="statTool">Paint</span></div>
+        <div class="sidebar-section" style="margin-top:10px;">TERRAIN USE</div>
+        <div id="terrainCount" style="padding: 0 12px; font-family: 'Special Elite', monospace; font-size: 11px; color: var(--ink-faded);">
+          <!-- Map tile counts -->
+        </div>
+      </div>
+
+      <!-- UNIT INSPECTOR (Play Mode Only) -->
+      <div class="sidebar right play-only">
+        <div class="sidebar-section">UNIT INSPECTOR</div>
+        <div class="info-row"><span>Name</span><span id="statName">—</span></div>
+        <div class="info-row"><span>HP</span><span id="statHP">—</span></div>
+        <div class="sidebar-section" style="margin-top:10px;">GAME STATE</div>
+        <div class="info-row"><span>Heat Level</span><span style="color:var(--stamp-red); font-weight:bold;">0 / 20</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== LOAD MAP MODAL (EDITOR) ==================== -->
+  <div class="modal-overlay" id="loadMapModal" style="display:none; position:fixed; inset:0; background:rgba(44,30,22,0.8); align-items:center; justify-content:center; z-index:100;">
+    <div class="modal" style="background:var(--paper-bg); border:4px double var(--ink-main); padding:30px; max-width:400px; width:90%; text-align:center;">
+      <h2 style="font-family:'Rye'; margin-bottom:20px;">📂 LOAD MAP</h2>
+      <label style="display:block; margin-bottom:20px; font-family:'Special Elite'; font-size:14px; text-align:left;">
+        Select Map to Edit:
+        <select id="load-map-select" style="width:100%; padding:8px; margin-top:5px; background:white; border:1px solid var(--ink-main);">
+          <option value="">Loading maps...</option>
+        </select>
+      </label>
+      <div style="display:flex; gap:10px; justify-content:flex-end;">
+        <button class="btn btn-gold" id="btn-confirm-load">Load Map</button>
+        <button class="btn" onclick="document.getElementById('loadMapModal').style.display='none'">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== LOBBY MODAL ==================== -->
+  <div class="modal-overlay" id="lobbyModal" style="display:none; position:fixed; inset:0; background:rgba(44,30,22,0.8); align-items:center; justify-content:center; z-index:100;">
+    <div class="modal" style="background:var(--paper-bg); border:4px double var(--ink-main); padding:30px; text-align:center; max-width:400px; width:90%;">
+      <h2 style="font-family:'Rye'; font-size:32px; margin-bottom:20px;">GAME LOBBY</h2>
+      <button class="btn btn-gold" id="btn-lobby-new" style="width:100%; margin-bottom:10px; padding:12px;">⚔️ Create New Game</button>
+      <button class="btn btn-rust" id="btn-lobby-load" style="width:100%; padding:12px;">📂 Load Saved Game</button>
+      <button class="btn" onclick="document.getElementById('lobbyModal').style.display='none'" style="margin-top:20px;">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ==================== SETUP WIZARD MODAL ==================== -->
+  <div class="modal-overlay" id="wizardModal" style="display:none; position:fixed; inset:0; background:rgba(44,30,22,0.8); align-items:center; justify-content:center; z-index:100;">
+    <div class="modal" style="background:var(--paper-bg); border:4px double var(--ink-main); padding:30px; max-width:450px; width:90%;">
+      <h2 style="font-family:'Rye'; margin-bottom:20px;">🚀 SETUP WIZARD</h2>
+      <label style="display:block; margin-bottom:10px; font-family:'Special Elite'; font-size:14px;">
+        Scenario:
+        <select id="wiz-scenario" style="width:100%; padding:8px; margin-top:5px; background:white; border:1px solid var(--ink-main);">
+          <option value="Shootout">Main Street Shootout</option>
+          <option value="Heist">The Bank Job</option>
+          <option value="Heist">Jailbreak</option>
+          <option value="Heist">Escort - 3:10 to Yuma</option>
+          <option value="Heist">Prey</option>
+        </select>
+      </label>
+      <label style="display:block; margin-bottom:10px; font-family:'Special Elite'; font-size:14px;">
+        Select Map:
+        <select id="wiz-map" style="width:100%; padding:8px; margin-top:5px; background:white; border:1px solid var(--ink-main);">
+          <option value="">Loading maps...</option>
+        </select>
+      </label>
+      <label style="display:block; margin-bottom:20px; font-family:'Special Elite'; font-size:14px;">
+        AI Thugs to Spawn:
+        <input type="number" id="wiz-enemies" value="4" min="1" max="10" style="width:100%; padding:8px; margin-top:5px; background:white; border:1px solid var(--ink-main);">
+      </label>
+      <div style="display:flex; gap:10px; justify-content:flex-end;">
+        <button class="btn btn-rust" id="btn-wizard-start">Launch Game</button>
+        <button class="btn" onclick="document.getElementById('wizardModal').style.display='none'">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== GAME DESIGNER SUITE ==================== -->
+  <div class="modal-overlay" id="designerModal" style="display:none; position:fixed; inset:0; background:rgba(44,30,22,0.6); align-items:center; justify-content:center; z-index:900;">
+    <div class="modal" style="background:var(--paper-bg); border:4px double var(--ink-main); max-width:900px; width:95%; height:80vh; display:flex; flex-direction:column; padding:0;">
+      <!-- Designer Header & Tabs -->
+      <div style="background:var(--ink-main); color:var(--paper-bg); padding:10px 20px; display:flex; align-items:center; gap:20px;">
+        <h2 style="font-family:'Rye'; margin:0; font-size:20px;">⚙️ ENGINE DIAGNOSTICS</h2>
+        <div style="display:flex; gap:10px; margin-left:auto;">
+          <button class="btn btn-gold" id="tab-brain" style="padding:4px 10px; font-size:12px;">🧠 AI Brain</button>
+          <button class="btn" id="tab-los" style="padding:4px 10px; font-size:12px; color:white; border-color:white;">👁️ LOS Matrix</button>
+          <button class="btn" id="tab-roster" style="padding:4px 10px; font-size:12px; color:white; border-color:white;">📋 Live Roster</button>
+          <button class="btn btn-rust" onclick="document.getElementById('designerModal').style.display='none'" style="padding:4px 10px; font-size:12px;">Close</button>
+        </div>
+      </div>
+      <!-- Designer Content Area -->
+      <div id="designer-content" style="flex:1; overflow:auto; padding:20px; font-family:'Special Elite', monospace; font-size:12px; background:rgba(0,0,0,0.03);">
+        <div style="text-align:center; color:var(--ink-faded); margin-top:50px;">Awaiting Engine Telemetry...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

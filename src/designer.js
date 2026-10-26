@@ -2,7 +2,7 @@ import { state } from './state.js';
 import { db, refs } from './firebase.js';
 import { set } from 'firebase/database';
 import { showToast } from './ui.js';
-import { checkLOSAndCover, calculateDistance } from './engine_math.js'; 
+import { checkLOSAndCover, calculateDistance } from './engine_math.js';
 
 let activeTab = 'brain';
 
@@ -44,18 +44,39 @@ function switchTab(tabName, btnElement) {
   refreshDesignerContent();
 }
 
-
-// Replace refreshDesignerContent() with this:
 function refreshDesignerContent() {
   const content = document.getElementById('designer-content');
   if (!content) return;
 
   if (activeTab === 'brain') {
+    const d = window.EngineDiagnostics || {};
+    
     content.innerHTML = `
-      <h3 style="font-family:'Rye'; border-bottom:2px solid var(--sepia-dark); margin-bottom:10px;">🧠 LIVE AI TELEMETRY</h3>
-      <div id="telemetry-log" style="background:var(--ink-main); color:#00FF00; padding:15px; border-radius:4px; font-family:monospace; min-height:200px; max-height:400px; overflow-y:auto;">
-        > ENGINE_IDLE<br>
-        > WAITING_FOR_INITIATIVE_TRIGGER...
+      <h3 style="font-family:'Rye'; border-bottom:2px solid var(--border-subtle); margin-bottom:10px; color:var(--text-main);">🧠 LIVE ENGINE TELEMETRY V6.9.1</h3>
+      
+      <div style="background:var(--bg-main); border:1px solid var(--border-subtle); border-radius:4px; padding:15px; font-family:'Special Elite', monospace; font-size:13px; margin-bottom:15px;">
+        <div style="color:var(--accent-primary); font-weight:bold; margin-bottom:8px; border-bottom:1px solid var(--border-subtle); padding-bottom:4px;">[1] ACTIVE UNIT</div>
+        <div class="info-row"><span>Unit Name:</span><span>${d.unitName || 'N/A'}</span></div>
+        <div class="info-row"><span>Trait Profile:</span><span>${d.traitProfile || 'N/A'}</span></div>
+        <div class="info-row"><span>State Engine:</span><span>${d.stateEngine || 'IDLE'}</span></div>
+        <div class="info-row"><span>Bravery Guts Log:</span><span style="color:#4a5d23;">🟢 PASSED (Auto)</span></div>
+      </div>
+
+      <div style="background:var(--bg-main); border:1px solid var(--border-subtle); border-radius:4px; padding:15px; font-family:'Special Elite', monospace; font-size:13px; margin-bottom:15px;">
+        <div style="color:var(--accent-primary); font-weight:bold; margin-bottom:8px; border-bottom:1px solid var(--border-subtle); padding-bottom:4px;">[2] MOVEMENT AUDIT</div>
+        <div class="info-row"><span>Vector Step:</span><span>From ${d.moveStart || '-'} To ${d.moveEnd || '-'}</span></div>
+        <div class="info-row"><span>Grid Distance:</span><span>${d.moveDist || 0}" spent</span></div>
+      </div>
+      
+      <div style="background:var(--bg-main); border:1px solid var(--border-subtle); border-radius:4px; padding:15px; font-family:'Special Elite', monospace; font-size:13px;">
+        <div style="color:var(--accent-primary); font-weight:bold; margin-bottom:8px; border-bottom:1px solid var(--border-subtle); padding-bottom:4px;">[3] COMBAT RESOLUTION</div>
+        <div class="info-row"><span>Engagement Target:</span><span>${d.combatTarget || 'N/A'}</span></div>
+        <div class="info-row" style="flex-direction:column; align-items:flex-start; margin-top: 5px;">
+            <span style="margin-bottom:6px;">Accuracy / Math Logic:</span>
+            <span style="color:var(--accent-secondary); font-size:12px; background:rgba(0,0,0,0.3); padding:8px; border-radius:2px; width:100%; box-sizing:border-box;">${d.combatMath || '-'}</span>
+        </div>
+        <div class="info-row" style="margin-top: 5px;"><span>Attack Result:</span><span>${d.combatResult || '-'}</span></div>
+        <div class="info-row"><span>Damage Breakdown:</span><span>${d.combatDamage || '-'}</span></div>
       </div>
     `;
   } 

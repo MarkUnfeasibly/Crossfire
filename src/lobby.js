@@ -10,7 +10,9 @@ export function setupLobbyUI() {
   if (btnLoad) {
     btnLoad.addEventListener('click', () => {
       document.getElementById('lobbyModal').style.display = 'none';
-      document.body.className = 'mode-play';
+      // 🎯 FIX: Safely swap modes without destroying themes
+      document.body.classList.remove('mode-menu');
+      document.body.classList.add('mode-play');
       showToast("Game Loaded!");
     });
   }
@@ -20,7 +22,6 @@ export function setupLobbyUI() {
       document.getElementById('lobbyModal').style.display = 'none';
       document.getElementById('wizardModal').style.display = 'flex';
       
-      // 🎯 Fetch available maps when the wizard opens
       populateMapDropdown();
     });
   }
@@ -31,18 +32,32 @@ export function setupLobbyUI() {
       const scenario = document.getElementById('wiz-scenario').value;
       const enemyCount = parseInt(document.getElementById('wiz-enemies').value);
       
+      // Dynamic Theme Switching
+      if (scenario === '1920s Heist' || scenario === 'Prohibition Shootout') { 
+          document.body.classList.add('theme-1920s');
+      } else {
+          document.body.classList.remove('theme-1920s'); 
+      }
+      
       if (mapName === "") return showToast("⚠️ Please select a map!");
       
-      await generateNewGame(mapName, scenario, enemyCount);
-      
-      document.getElementById('wizardModal').style.display = 'none';
-      document.body.className = 'mode-play';
-      showToast(`🚀 ${scenario} Started!`);
+      try {
+          await generateNewGame(mapName, scenario, enemyCount);
+          
+          document.getElementById('wizardModal').style.display = 'none';
+          
+          // 🎯 FIX: Safely swap modes without destroying themes
+          document.body.classList.remove('mode-menu');
+          document.body.classList.add('mode-play');
+          showToast(`🚀 ${scenario} Started!`);
+      } catch (error) {
+          console.error("Game Generation Error:", error);
+          showToast("⚠️ Error starting game. Check console.");
+      }
     });
   }
 }
 
-// 🎯 Fetch saved maps from Firebase and populate the dropdown
 async function populateMapDropdown() {
   const mapSelect = document.getElementById('wiz-map');
   if (!mapSelect) return;
@@ -51,10 +66,10 @@ async function populateMapDropdown() {
   
   try {
     const snap = await get(ref(db, 'savedMaps'));
-    mapSelect.innerHTML = ''; // Clear loading text
+    mapSelect.innerHTML = ''; 
     
     if (snap.exists()) {
-      const maps = Object.keys(snap.val()); // Get all map names (keys)
+      const maps = Object.keys(snap.val()); 
       
       if (maps.length === 0) {
         mapSelect.innerHTML = '<option value="">No maps found in database</option>';
@@ -76,7 +91,6 @@ async function populateMapDropdown() {
 }
 
 async function generateNewGame(mapName, scenario, enemyCount) {
-  // 1. Pull the map from the database
   const mapRef = ref(db, `savedMaps/${mapName}`);
   const mapSnap = await get(mapRef);
   
@@ -85,28 +99,25 @@ async function generateNewGame(mapName, scenario, enemyCount) {
     return;
   }
   
-  let groundMap = mapSnap.val().ground;
-  let roofMap = mapSnap.val().roof;
+  let mapData = mapSnap.val();
+  
+  // 🎯 FIX: Provide safe fallback arrays so Firebase doesn't crash on 'undefined'
+  let groundMap = mapData.ground || Array.from({length: 48}, () => Array(48).fill(''));
+  let roofMap = mapData.roof || Array.from({length: 48}, () => Array(48).fill(''));
 
-  // 2. Drop Objective Tokens into the map based on Scenario
   if (scenario === "Heist") {
-    // Drop a vault/loot token dead center
     const centerR = Math.floor(groundMap.length / 2);
     const centerC = Math.floor(groundMap[0].length / 2);
     groundMap[centerR][centerC] = "$"; 
   }
 
-  // Push Map to live game state
   await set(refs.groundMap, groundMap);
   await set(refs.roofMap, roofMap);
 
-  // 3. Generate the Roster
   let newRoster = [];
   
-  // A. Create Headers
   newRoster.push(["Name", "Shoulder", "Handgun", "H2H", "Guts", "Build", "Ability", "Max Build", "Weapon 1", "W1 Loaded", "W1 Reserve", "Position", "Weapon 2", "W2 Loaded", "W2 Reserve", "Control", "Status", "Traits", "LastPos", "InitDone", "Weapon_H2H", "Mounted", "Speed_Tier", "Elevation"]);
   
-  // B. Give the player a Sheriff to control
   newRoster.push([
     "Player Sheriff", 14, 18, 14, 16, 12, 15, 12, 
     "Colt .45", 6, 12, "L20", 
@@ -114,9 +125,8 @@ async function generateNewGame(mapName, scenario, enemyCount) {
     "Player", "", "", "L20", false, "", false, 0, "Ground"
   ]);
 
-  // C. Generate Random AI Thugs
   const wildWestNames = ["Mad Dog", "Rattlesnake", "One-Eyed", "Dusty", "Black-Hat"];
-  const weapons = ["Colt .45", "Winchester Rifle", "Double Barrel Shotgun"];
+  const weapons = ["Colt .45", "Winchester", "Shotgun"]; // Updated to match exact DB keys
   
   for (let i = 0; i < enemyCount; i++) {
     let moniker = wildWestNames[Math.floor(Math.random() * wildWestNames.length)];

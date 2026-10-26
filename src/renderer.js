@@ -4,6 +4,8 @@ import { set } from 'firebase/database';
 import { refs } from './firebase.js';
 import { coordsToCell, cellToCoords, calculateDistance } from './engine_math.js'; 
 import { showToast, logAction } from './ui.js'; 
+import { executeCombat } from './engine_combat.js';
+import { MOVEMENT_DB } from './data_tables.js'; 
 
 export let app;
 export let cellSize = 40;
@@ -97,7 +99,7 @@ export function renderMap() {
         let t = state.terrainCache[aSym];
         let terrain = new PIXI.Graphics();
         terrain.beginFill(t.color.replace('#', '0x'));
-        terrain.lineStyle(2, t.border.replace('#', '0x'), 1);
+        terrain.lineStyle(1, t.border.replace('#', '0x'), 1, 1); 
         terrain.drawRect(x, y, cellSize, cellSize);
         terrain.endFill();
         mapContainer.addChild(terrain);
@@ -130,7 +132,7 @@ export function renderMap() {
         }
         let text = new PIXI.Text(colStr, {
           fontFamily: 'Special Elite, monospace',
-          fontSize: Math.max(8, cellSize * 0.30),
+          fontSize: Math.max(12, cellSize * 0.35), 
           fill: 0x8B261A, 
           fontWeight: 'bold'
         });
@@ -145,7 +147,7 @@ export function renderMap() {
       if (r === 0 || (r + 1) % 6 === 0) {
         let text = new PIXI.Text(String(r + 1), {
           fontFamily: 'Special Elite, monospace',
-          fontSize: Math.max(8, cellSize * 0.30),
+          fontSize: Math.max(12, cellSize * 0.35), 
           fill: 0x8B261A,
           fontWeight: 'bold'
         });
@@ -162,7 +164,8 @@ export function renderMap() {
   mapContainer.on('pointerdown', async (e) => {
       e.stopPropagation(); 
       
-      if (document.body.className !== 'mode-play' || selectedUnitIndex === null) return;
+      // 🎯 FIX: Use classList.contains() instead of strict equality!
+      if (!document.body.classList.contains('mode-play') || selectedUnitIndex === null) return;
       
       const pos = mapContainer.toLocal(e.global);
       const col = Math.floor(pos.x / cellSize);
@@ -176,22 +179,20 @@ export function renderMap() {
 
       const dist = calculateDistance(startCell, targetCell);
       
-      let maxDist = 12; 
+      let maxDist = MOVEMENT_DB["run"].inches; 
       const isMounted = unit[21] === true || String(unit[21]).toUpperCase() === 'TRUE';
       const statusStr = String(unit[16] || "").toLowerCase();
       
-      if (isMounted) maxDist = 18;
-      if (statusStr.includes("leg")) maxDist = 6;
-
-      if (dist > maxDist) {
-          showToast(`⚠️ Too far! Max move is ${maxDist}" (Attempted ${dist}")`);
-          return;
-      }
+      if (isMounted) maxDist = MOVEMENT_DB["cantering horse"].inches;
+      if (statusStr.includes("leg") || statusStr.includes("chest")) maxDist = MOVEMENT_DB["walk"].inches;
+      if (statusStr.includes("belly")) maxDist = MOVEMENT_DB["crawl"].inches;
 
       const sCoords = cellToCoords(startCell);
       const tCoords = cellToCoords(targetCell);
       const steps = Math.max(Math.abs(sCoords.x - tCoords.x), Math.abs(sCoords.y - tCoords.y));
+      
       let isBlocked = false;
+      let terrainTax = 0;
 
       for (let i = 1; i <= steps; i++) {
           let t = i / steps;
@@ -206,9 +207,14 @@ export function renderMap() {
           let tile = state.maps.ground[cy-1][cx-1];
           if (tile && state.terrainCache[tile]) {
               let tData = state.terrainCache[tile];
+              
               if (tData.blocksMove === true || String(tData.blocksMove).toUpperCase() === 'TRUE') {
                   isBlocked = true;
                   break;
+              }
+              
+              if (tData.moveTax) {
+                  terrainTax += Number(tData.moveTax);
               }
           }
       }
@@ -218,11 +224,16 @@ export function renderMap() {
           return;
       }
 
+      if ((dist + terrainTax) > maxDist) {
+          showToast(`⚠️ Too far! Max move is ${maxDist}" (Cost: ${dist}" dist + ${terrainTax}" terrain tax)`);
+          return;
+      }
+
       let updatedRoster = [...state.roster];
       updatedRoster[selectedUnitIndex][11] = targetCell;
       await set(refs.roster, updatedRoster);
       
-      logAction(unit[0], 'MOVED', `Relocated to ${targetCell} (${dist}")`);
+      logAction(unit[0], 'MOVED', `Relocated to ${targetCell} (Cost: ${dist + terrainTax}")`);
       
       selectedUnitIndex = null; 
       renderTokens();
@@ -243,6 +254,73 @@ export function renderTokens() {
   tokenContainer = new PIXI.Container();
   tokenContainer.name = 'tokens';
   
+  // 🎯 FIX: Use classList.contains() for the visualizer as well!
+  if (selectedUnitIndex !== null && document.body.classList.contains('mode-play')) {
+      const unit = state.roster[selectedUnitIndex];
+      const startCell = unit[11];
+      const elev = unit[23] || "Ground";
+      
+      if (elev.toLowerCase() === renderLayer.toLowerCase()) {
+          const sCoords = cellToCoords(startCell);
+          
+          let maxDist = MOVEMENT_DB["run"].inches; 
+          const isMounted = unit[21] === true || String(unit[21]).toUpperCase() === 'TRUE';
+          const statusStr = String(unit[16] || "").toLowerCase();
+          
+          if (isMounted) maxDist = MOVEMENT_DB["cantering horse"].inches;
+          if (statusStr.includes("leg") || statusStr.includes("chest")) maxDist = MOVEMENT_DB["walk"].inches;
+          if (statusStr.includes("belly")) maxDist = MOVEMENT_DB["crawl"].inches;
+
+          let highlightGrid = new PIXI.Graphics();
+          highlightGrid.eventMode = 'none'; 
+          
+          const highlightColor = (String(unit[15]).trim().toUpperCase() === "PLAYER") ? 0x2A4B7C : 0x8B261A;
+          highlightGrid.beginFill(highlightColor, 0.15); 
+          highlightGrid.lineStyle(1, highlightColor, 0.3);
+
+          const maxC = state.maps.ground[0].length;
+          const maxR = state.maps.ground.length;
+
+          for (let x = Math.max(1, sCoords.x - maxDist); x <= Math.min(maxC, sCoords.x + maxDist); x++) {
+              for (let y = Math.max(1, sCoords.y - maxDist); y <= Math.min(maxR, sCoords.y + maxDist); y++) {
+                  const tCell = coordsToCell(x, y);
+                  if (tCell === startCell) continue;
+
+                  const dist = calculateDistance(startCell, tCell);
+                  if (dist > maxDist) continue; 
+
+                  const steps = Math.max(Math.abs(sCoords.x - x), Math.abs(sCoords.y - y));
+                  let isBlocked = false;
+                  let terrainTax = 0;
+                  
+                  for (let i = 1; i <= steps; i++) {
+                      let t = i / steps;
+                      let cx = Math.round(sCoords.x + t * (x - sCoords.x));
+                      let cy = Math.round(sCoords.y + t * (y - sCoords.y));
+                      let tile = state.maps.ground[cy-1][cx-1];
+                      
+                      let tData = state.terrainCache[tile];
+                      if (tData) {
+                          if (tData.blocksMove === true || String(tData.blocksMove).toUpperCase() === 'TRUE') {
+                              isBlocked = true;
+                              break;
+                          }
+                          if (tData.moveTax) {
+                              terrainTax += Number(tData.moveTax);
+                          }
+                      }
+                  }
+
+                  if (!isBlocked && (dist + terrainTax) <= maxDist) {
+                      highlightGrid.drawRect((x - 1) * cellSize, (y - 1) * cellSize, cellSize, cellSize);
+                  }
+              }
+          }
+          highlightGrid.endFill();
+          tokenContainer.addChild(highlightGrid);
+      }
+  }
+
   for (let i = 1; i < state.roster.length; i++) {
     const row = state.roster[i];
     const hp = Number(row[5]);
@@ -254,34 +332,70 @@ export function renderTokens() {
       const coords = cellToCoords(pos);
       if (!coords) continue;
       
-      // 🎯 FIX: Subtract 1 from the 1-indexed coordinates so A1 draws at 0,0 on the canvas!
       const px = (coords.x - 1) * cellSize + (cellSize / 2);
       const py = (coords.y - 1) * cellSize + (cellSize / 2);
-      const tokenRadius = (cellSize / 2) - 4; 
+      const tokenRadius = (cellSize / 2); 
       
       if (selectedUnitIndex === i) {
           let highlight = new PIXI.Graphics();
           highlight.lineStyle(3, 0xFFD700, 1);
-          highlight.drawCircle(px, py, tokenRadius + 4);
+          highlight.drawPolygon([
+              px, py - (tokenRadius + 3),
+              px + (tokenRadius + 3), py,
+              px, py + (tokenRadius + 3),
+              px - (tokenRadius + 3), py
+          ]);
           tokenContainer.addChild(highlight);
       }
       
-      let fillColor = 0x8B261A; 
-      if (control === "PLAYER") fillColor = 0x2A4B7C; 
-      else if (control !== "AI") fillColor = 0xC8972A; 
+      let fillColor = 0x8B261A;   
+      let borderColor = 0x5C1911; 
+      
+      if (control === "PLAYER") {
+          fillColor = 0x2A4B7C;   
+          borderColor = 0x1A2D4A; 
+      } else if (control !== "AI") {
+          fillColor = 0xC8972A;   
+          borderColor = 0x8B691D; 
+      }
 
       let token = new PIXI.Graphics();
       token.beginFill(fillColor);
-      token.lineStyle(2, 0x1A1A1A, 1);
-      token.drawCircle(px, py, tokenRadius);
+      token.lineStyle(2, borderColor, 1, 0); 
+      
+      token.drawPolygon([
+          px, py - tokenRadius,     
+          px + tokenRadius, py,     
+          px, py + tokenRadius,     
+          px - tokenRadius, py      
+      ]);
       token.endFill();
       
       token.eventMode = 'static';
       token.cursor = 'pointer';
-      token.on('pointerdown', (e) => {
+      
+      token.on('pointerdown', async (e) => {
         e.stopPropagation(); 
         
-        if (document.body.className === 'mode-play') {
+        // 🎯 FIX: Use classList.contains() here as well!
+        if (document.body.classList.contains('mode-play')) {
+            if (selectedUnitIndex !== null && selectedUnitIndex !== i) {
+                const attackerRow = state.roster[selectedUnitIndex];
+                const attackerControl = String(attackerRow[15]).trim().toUpperCase();
+                
+                if (attackerControl === "PLAYER" && control === "AI") {
+                    const shooterUnit = { data: attackerRow, index: selectedUnitIndex };
+                    const targetUnit = { data: row, index: i };
+                    const traits = String(attackerRow[17] || "").toLowerCase();
+                    const hasTrait = (t) => traits.includes(t.toLowerCase());
+
+                    await executeCombat(shooterUnit, targetUnit, hasTrait);
+                    
+                    selectedUnitIndex = null; 
+                    renderTokens();
+                    return; 
+                }
+            }
             selectedUnitIndex = i; 
         }
         

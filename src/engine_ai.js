@@ -3,18 +3,13 @@ import { refs } from './firebase.js';
 import { set } from 'firebase/database';
 import { calculateDistance, checkLOSAndCover, cellToCoords, coordsToCell } from './engine_math.js';
 import { executeCombat, getWeaponStats } from './engine_combat.js';
-import { logAction, writeTelemetry, showToast } from './ui.js';
-
-// ==========================================
-// 1. THE TACTICAL BRAIN (STATE ENGINE)
-// ==========================================
+import { logAction, showToast } from './ui.js';
 
 export function determineState(unit, players, tokens, hasTrait) {
     let pos = unit.data[11];
     let status = String(unit.data[16] || "").toLowerCase();
     let elev = unit.data[23] || "Ground";
     
-    // Weapon check
     let activeWpn = unit.data[8] || "Unarmed";
     let loaded = Number(unit.data[9]) || 0;
     let reserve = Number(unit.data[10]) || 0;
@@ -36,30 +31,23 @@ export function determineState(unit, players, tokens, hasTrait) {
     let validTargets = [];
     let dashTargets = [];
 
-    // Scan all players
     players.forEach(p => {
         let pPos = p.data[11];
         let pElev = p.data[23] || "Ground";
         let dist = calculateDistance(pos, pPos);
         
-        if (dist <= 1 && elev === pElev) adjacentPlayers.push(p);
+        if (dist <= 1.5 && elev === pElev) adjacentPlayers.push(p);
 
         let losResult = checkLOSAndCover(pos, elev, pPos, pElev, false);
         if (!losResult.blocked) {
-            // Threat Math: Distance - (Cover Penalty * 3)
             let threatScore = dist - (losResult.mod * 3);
             let wpnStats = getWeaponStats(activeWpn);
             
-            // Simplified range check for VTT
-            if (dist > 20 && wpnStats.isSidearm) {
-                dashTargets.push({ targetInfo: p, threat: threatScore });
-            } else {
-                validTargets.push({ targetInfo: p, threat: threatScore });
-            }
+            if (dist > 20 && wpnStats.isSidearm) dashTargets.push({ targetInfo: p, threat: threatScore });
+            else validTargets.push({ targetInfo: p, threat: threatScore });
         }
     });
 
-    // Heist & Robber Logic
     if (hasTrait("Robber")) {
         if (status.includes("has loot")) {
             if (adjacentPlayers.length > 0) return { name: 'MELEE_LOCKED', target: adjacentPlayers[0], reason: 'In Zone of Control' };
@@ -91,27 +79,32 @@ export function determineState(unit, players, tokens, hasTrait) {
     return { name: 'HUNT', target: null, reason: 'Holding position, no visual on threats.' };
 }
 
-// ==========================================
-// 2. TURN EXECUTION
-// ==========================================
-
 export async function processAITurn(unit) {
-    writeTelemetry("B4", `Processing turn for ${unit.data[0]}...`);
+    window.EngineDiagnostics = {
+        unitName: unit.data[0],
+        traitProfile: unit.data[17] || "None",
+        stateEngine: "CALCULATING...",
+        moveStart: unit.data[11],
+        moveEnd: unit.data[11],
+        moveDist: 0,
+        combatTarget: "N/A",
+        combatMath: "N/A",
+        combatResult: "N/A",
+        combatDamage: "N/A"
+    };
     
     const statusStr = String(unit.data[16] || "").toLowerCase();
     if (Number(unit.data[5]) <= 0 || statusStr.includes("dead") || statusStr.includes("kia")) {
-        writeTelemetry("B4", "Unit is DEAD - Terminating Turn");
+        window.EngineDiagnostics.stateEngine = "DEAD (Terminating Turn)";
         return;
     }
 
     const traits = String(unit.data[17] || "");
     const hasTrait = (t) => traits.toLowerCase().includes(t.toLowerCase());
 
-    // Gather Live Players
     const players = state.roster.slice(1).map((r, i) => ({ data: r, index: i + 1 }))
         .filter(p => String(p.data[15]).trim().toLowerCase() === "player" && Number(p.data[5]) > 0);
 
-    // Find Objective Tokens
     let tokens = { loot: null, vip: null, extract: null };
     const ground = state.maps.ground;
     for(let r=0; r<ground.length; r++) {
@@ -123,11 +116,42 @@ export async function processAITurn(unit) {
     }
 
     let aiState = determineState(unit, players, tokens, hasTrait);
-    writeTelemetry("B5", `State: ${aiState.name} (${aiState.reason})`);
+    window.EngineDiagnostics.stateEngine = `${aiState.name} (${aiState.reason})`;
 
-    // Execute State
-    if (aiState.name === 'COMBAT') {
-        await executeCombat(unit, aiState.target, hasTrait, 0, 0);
+    // 🎯 NEW: Move & Shoot Sequencing
+    if (aiState.name === 'COMBAT' || aiState.name === 'MELEE_LOCKED') {
+        let shootFirst = true;
+        let distanceMoved = 0;
+        let currentPos = unit.data[11];
+        
+        if (aiState.name === 'COMBAT') {
+            let tPos = aiState.target.data[11];
+            let dist = calculateDistance(currentPos, tPos);
+            let elev = unit.data[23] || "Ground";
+            let tElev = aiState.target.data[23] || "Ground";
+            let startLOS = checkLOSAndCover(currentPos, elev, tPos, tElev, false);
+            
+            // If blocked, or target is farther than 15 inches, move closer first!
+            if (startLOS.blocked || dist > 15) {
+                shootFirst = false;
+                let maxDist = 12;
+                if (String(unit.data[21]).toUpperCase() === 'TRUE') maxDist = 18;
+                if (String(unit.data[16] || "").toLowerCase().includes("leg")) maxDist = 6;
+                
+                // Advance! Stop adjacent to the target (true flag)
+                let endPos = await commitMovement(unit, tPos, maxDist, true); 
+                distanceMoved = calculateDistance(currentPos, endPos);
+                
+                // Update local memory so combat calculates from the NEW position
+                unit.data[11] = endPos; 
+            }
+        }
+
+        if (shootFirst) {
+            await executeCombat(unit, aiState.target, hasTrait, 0);
+        } else {
+            await executeCombat(unit, aiState.target, hasTrait, distanceMoved);
+        }
     } 
     else if (aiState.name === 'RELOADING') {
         let reserve = Number(unit.data[10]);
@@ -139,11 +163,9 @@ export async function processAITurn(unit) {
         logAction(unit.data[0], `RELOADED`, `Loaded ${reloadAmt} rounds.`);
     }
     else if (aiState.name === 'HEIST_MOVE' || aiState.name === 'DASH') {
-        // Simplified greedy movement toward target for VTT V1
         let targetPos = aiState.target ? aiState.target.data[11] : tokens.loot;
         if (targetPos) {
-            let finalPos = await commitMovement(unit, targetPos, 12);
-            logAction(unit.data[0], `MOVED`, `Advanced toward objective/target to ${finalPos}`);
+            await commitMovement(unit, targetPos, 12);
         }
     }
     else if (aiState.name === 'GRAB_LOOT') {
@@ -153,28 +175,22 @@ export async function processAITurn(unit) {
         
         let c = cellToCoords(tokens.loot);
         let updatedMap = [...state.maps.ground];
-        updatedMap[c.y-1][c.x-1] = ""; // Remove token from map
+        updatedMap[c.y-1][c.x-1] = ""; 
         await set(refs.groundMap, updatedMap);
         
         showToast(`💰 ${unit.data[0]} grabbed the Loot!`);
         logAction(unit.data[0], `OBJECTIVE`, `Grabbed the vault loot!`);
     }
     else if (aiState.name === 'ESCAPE') {
-        // Just move to top left corner for now as an escape vector
         await commitMovement(unit, "A1", 12); 
     }
 }
 
-// ==========================================
-// 3. MOVEMENT & PATHING
-// ==========================================
-
-async function commitMovement(unit, destCell, budget) {
+async function commitMovement(unit, destCell, budget, stopAdjacent = false) {
     let startCell = unit.data[11];
     let startCoords = cellToCoords(startCell);
     let destCoords = cellToCoords(destCell);
     
-    // Simple Bresenham-style straight line walk up to budget limit
     let steps = Math.max(Math.abs(startCoords.x - destCoords.x), Math.abs(startCoords.y - destCoords.y));
     let finalCell = startCell;
     let cost = 0;
@@ -184,16 +200,16 @@ async function commitMovement(unit, destCell, budget) {
         let cx = Math.round(startCoords.x + t * (destCoords.x - startCoords.x));
         let cy = Math.round(startCoords.y + t * (destCoords.y - startCoords.y));
         
-        // Ensure bounds
         if (cy < 1 || cx < 1 || cy > state.maps.ground.length || cx > state.maps.ground[0].length) break;
         
         let checkCell = coordsToCell(cx, cy);
-        
-        // Stop if we hit a solid wall
         let tile = state.maps.ground[cy-1][cx-1];
+        
+        // 🎯 NEW: Stop one tile short if we are attacking someone
+        if (stopAdjacent && checkCell === destCell) break;
+        
         if (tile && state.terrainCache[tile] && state.terrainCache[tile].blocksMove) break;
         
-        // Calculate step cost (1 for straight, 1.5 for diagonal)
         let isDiag = (Math.abs(cx - cellToCoords(finalCell).x) === 1 && Math.abs(cy - cellToCoords(finalCell).y) === 1);
         cost += isDiag ? 1.5 : 1;
         
@@ -201,11 +217,18 @@ async function commitMovement(unit, destCell, budget) {
         finalCell = checkCell;
     }
 
-    // Update Roster
     if (finalCell !== startCell) {
         let updatedRoster = [...state.roster];
         updatedRoster[unit.index][11] = finalCell;
+        
+        // Ensure local memory is updated for subsequent actions
+        unit.data[11] = finalCell;
+        
         await set(refs.roster, updatedRoster);
+        logAction(unit.data[0], 'MOVED', `Advanced to ${finalCell}`);
+        
+        window.EngineDiagnostics.moveEnd = finalCell;
+        window.EngineDiagnostics.moveDist = Math.floor(cost);
     }
     
     return finalCell;

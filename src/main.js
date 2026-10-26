@@ -6,7 +6,7 @@ import { initRenderer, renderMap, renderTokens } from './renderer.js';
 import { attachEditorListeners } from './editor.js';
 import { setupLobbyUI } from './lobby.js';
 import { setupDesignerUI } from './designer.js';
-import { processAITurn } from './engine_ai.js'; // 🎯 We import the real AI Brain here!
+import { processAITurn } from './engine_ai.js'; 
 
 function boot() {
   console.log("🔫 Booting Quickdraw VTT Engine...");
@@ -16,17 +16,15 @@ function boot() {
   setupLobbyUI();
   setupDesignerUI(); 
 
-  // URL Parameter Check for Game Designer
   const urlParams = new URLSearchParams(window.location.search);
   if (urlParams.has('designer') || urlParams.has('Designer')) {
     const modal = document.getElementById('designerModal');
     if (modal) {
       modal.style.display = 'flex';
-      document.getElementById('tab-brain')?.click(); // Auto-load first tab
+      document.getElementById('tab-brain')?.click(); 
     }
   }
 
-  // -- MODE SWITCHING LOGIC --
   document.getElementById('btn-menu-play').addEventListener('click', () => {
     document.getElementById('lobbyModal').style.display = 'flex';
   });
@@ -43,6 +41,31 @@ function boot() {
   }
   
   initRenderer();
+
+  // 🎯 FIX: Independent Overlay & 2-Way Layer Toggle Logic
+  const btnGround = document.getElementById('layer-ground');
+  const btnRoof = document.getElementById('layer-roof');
+  const btnOverlay = document.getElementById('layer-overlay');
+  
+  let isOverlayActive = false;
+
+  btnGround?.addEventListener('click', () => {
+      btnGround.classList.add('active');
+      btnRoof.classList.remove('active');
+      import('./renderer.js').then(m => m.setRenderLayer('ground'));
+  });
+
+  btnRoof?.addEventListener('click', () => {
+      btnRoof.classList.add('active');
+      btnGround.classList.remove('active');
+      import('./renderer.js').then(m => m.setRenderLayer('roof'));
+  });
+
+  btnOverlay?.addEventListener('click', () => {
+      isOverlayActive = !isOverlayActive;
+      btnOverlay.classList.toggle('active', isOverlayActive);
+      import('./renderer.js').then(m => m.toggleRoofOverlay(isOverlayActive));
+  });
 
   const canvasElement = document.querySelector('canvas');
   if (canvasElement) {
@@ -75,7 +98,6 @@ function boot() {
       updateOccupiedMap();
       renderTokens();
       
-      // Auto-refresh the designer roster tab if it's currently open
       const designerContent = document.getElementById('designer-content');
       if (designerContent && document.getElementById('designerModal').style.display === 'flex') {
         const activeBtn = document.querySelector('.btn-gold[id^="tab-"]');
@@ -99,8 +121,8 @@ async function resetRound() {
   
   for (let i = 1; i < updatedRoster.length; i++) {
       if (updatedRoster[i]) {
-          updatedRoster[i][19] = false; // Reset InitDone (Column T)
-          updatedRoster[i][18] = updatedRoster[i][11]; // Update LastPos to current Pos
+          updatedRoster[i][19] = false; 
+          updatedRoster[i][18] = updatedRoster[i][11]; 
       }
   }
   
@@ -128,7 +150,6 @@ function drawNextInitiative() {
   
   activeUnit.data[19] = true; 
   
-  // Instantly update Firebase so the UI knows this unit has moved
   let updatedRoster = [...state.roster];
   updatedRoster[activeUnit.index][19] = true;
   set(refs.roster, updatedRoster);
@@ -136,7 +157,7 @@ function drawNextInitiative() {
   showToast(`🎴 INITIATIVE: ${name.toUpperCase()}`);
 
   if (type === "AI") {
-      processAITurn(activeUnit); // 🎯 This now properly calls the real engine function!
+      processAITurn(activeUnit); 
   }
 }
 

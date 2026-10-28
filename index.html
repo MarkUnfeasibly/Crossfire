@@ -258,26 +258,44 @@
   <div class="modal-overlay" id="wizardModal" style="display:none; position:fixed; inset:0; background:rgba(44,30,22,0.8); align-items:center; justify-content:center; z-index:100;">
     <div class="modal" style="background:var(--paper-bg); border:4px double var(--ink-main); padding:30px; max-width:450px; width:90%;">
       <h2 style="font-family:'Rye'; margin-bottom:20px;">🚀 SETUP WIZARD</h2>
+      
+      <!-- 🎯 NEW: Cascading Era Selection -->
       <label style="display:block; margin-bottom:10px; font-family:'Special Elite'; font-size:14px;">
-        Scenario:
-        <select id="wiz-scenario" style="width:100%; padding:8px; margin-top:5px; background:white; border:1px solid var(--ink-main);">
-          <option value="Shootout">Main Street Shootout</option>
-          <option value="Heist">The Bank Job</option>
-          <option value="Heist">Jailbreak</option>
-          <option value="Heist">Escort - 3:10 to Yuma</option>
-          <option value="Heist">Prey</option>
+        Era:
+        <select id="wiz-era" style="width:100%; padding:8px; margin-top:5px; background:white; border:1px solid var(--ink-main);">
+          <option value="">-- Select Era --</option>
+          <option value="Wild West">Wild West (1880s)</option>
+          <option value="1920s Gangsters">1920s Gangsters</option>
+          <option value="Beau Geste">Beau Geste</option>
         </select>
       </label>
+
+      <!-- Scenario Dropdown (Populated Dynamically) -->
+      <label style="display:block; margin-bottom:10px; font-family:'Special Elite'; font-size:14px;">
+        Scenario:
+        <select id="wiz-scenario" style="width:100%; padding:8px; margin-top:5px; background:white; border:1px solid var(--ink-main);" disabled>
+          <option value="">-- Select Era First --</option>
+        </select>
+      </label>
+
+      <!-- 🎯 NEW: Dynamic Objective Count -->
+      <label id="wiz-obj-container" style="display:none; margin-bottom:10px; font-family:'Special Elite'; font-size:14px;">
+        Number of Objectives:
+        <input type="number" id="wiz-obj-count" value="1" min="1" max="5" style="width:100%; padding:8px; margin-top:5px; background:white; border:1px solid var(--ink-main);">
+      </label>
+
       <label style="display:block; margin-bottom:10px; font-family:'Special Elite'; font-size:14px;">
         Select Map:
         <select id="wiz-map" style="width:100%; padding:8px; margin-top:5px; background:white; border:1px solid var(--ink-main);">
           <option value="">Loading maps...</option>
         </select>
       </label>
+
       <label style="display:block; margin-bottom:20px; font-family:'Special Elite'; font-size:14px;">
         AI Thugs to Spawn:
         <input type="number" id="wiz-enemies" value="4" min="1" max="10" style="width:100%; padding:8px; margin-top:5px; background:white; border:1px solid var(--ink-main);">
       </label>
+
       <div style="display:flex; gap:10px; justify-content:flex-end;">
         <button class="btn btn-rust" id="btn-wizard-start">Launch Game</button>
         <button class="btn" onclick="document.getElementById('wizardModal').style.display='none'">Cancel</button>

@@ -2,10 +2,11 @@ import * as PIXI from 'pixi.js';
 import { state } from './state.js';
 import { set } from 'firebase/database';
 import { refs } from './firebase.js';
-import { coordsToCell, cellToCoords, calculateDistance } from './engine_math.js'; 
+import { coordsToCell, cellToCoords, calculateDistance, checkLOSAndCover } from './engine_math.js'; 
 import { showToast, logAction } from './ui.js'; 
 import { executeCombat } from './engine_combat.js';
 import { MOVEMENT_DB } from './data_tables.js'; 
+import { finalizeRoster } from './lobby.js';
 
 export let app;
 export let cellSize = 40;
@@ -13,6 +14,68 @@ export let selectedUnitIndex = null;
 
 let showRoofOverlay = false;
 let renderLayer = 'ground';
+
+// 🎯 NEW: Dijkstra Flood-Fill for True Player Pathfinding
+function getReachableCells(startCell, maxDist) {
+    let reachable = new Set();
+    let openList = [{ cell: startCell, cost: 0 }];
+    let bestCost = new Map();
+    bestCost.set(startCell, 0);
+    
+    let maxC = state.maps.ground[0].length;
+    let maxR = state.maps.ground.length;
+    
+    while(openList.length > 0) {
+        openList.sort((a,b) => a.cost - b.cost);
+        let curr = openList.shift();
+        
+        if (curr.cost > maxDist) continue;
+        reachable.add(curr.cell);
+        
+        let cCoords = cellToCoords(curr.cell);
+        
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+                if (dx === 0 && dy === 0) continue;
+                let nx = cCoords.x + dx, ny = cCoords.y + dy;
+                if (nx < 1 || nx > maxC || ny < 1 || ny > maxR) continue;
+                
+                let nCell = coordsToCell(nx, ny);
+                let tile = state.maps.ground[ny-1][nx-1];
+                let tData = state.terrainCache[tile];
+                
+                let isBlocked = false;
+                let moveTax = 0;
+                if (tData) {
+                    if (tData.blocksMove === true || String(tData.blocksMove).toUpperCase() === 'TRUE') isBlocked = true;
+                    if (tData.moveTax) moveTax = Number(tData.moveTax);
+                }
+                
+                if (Math.abs(dx) === 1 && Math.abs(dy) === 1) {
+                    let c1Tile = state.maps.ground[cCoords.y-1][nx-1];
+                    let c2Tile = state.maps.ground[ny-1][cCoords.x-1];
+                    let c1Blocks = state.terrainCache[c1Tile]?.blocksMove;
+                    let c2Blocks = state.terrainCache[c2Tile]?.blocksMove;
+                    if (c1Blocks || c2Blocks) isBlocked = true;
+                }
+                
+                if (isBlocked) continue;
+                
+                let isDiag = (Math.abs(dx) === 1 && Math.abs(dy) === 1);
+                let stepCost = (isDiag ? 1.5 : 1) + moveTax;
+                let totalCost = curr.cost + stepCost;
+                
+                if (totalCost <= maxDist) {
+                    if (!bestCost.has(nCell) || totalCost < bestCost.get(nCell)) {
+                        bestCost.set(nCell, totalCost);
+                        openList.push({ cell: nCell, cost: totalCost });
+                    }
+                }
+            }
+        }
+    }
+    return { cells: reachable, costs: bestCost };
+}
 
 export function initRenderer() {
   const wrapper = document.getElementById('canvasWrapper');
@@ -25,7 +88,6 @@ export function initRenderer() {
   });
   
   PIXI.BaseTexture.defaultOptions.scaleMode = PIXI.SCALE_MODES.NEAREST;
-  
   wrapper.innerHTML = ''; 
   wrapper.appendChild(app.view);
   
@@ -95,7 +157,28 @@ export function renderMap() {
       }
 
       let aSym = activeMap && activeMap[r]?.[c];
-      if (aSym && state.terrainCache[aSym]) {
+      
+      if (aSym === '$' || aSym === '?' || aSym === '*') {
+          let objMarker = new PIXI.Graphics();
+          objMarker.beginFill(0xFFD700, 0.5); 
+          objMarker.drawRect(x, y, cellSize, cellSize);
+          objMarker.endFill();
+          mapContainer.addChild(objMarker);
+          
+          if (cellSize >= 24) {
+            let text = new PIXI.Text(aSym, {
+              fontFamily: 'Special Elite, monospace',
+              fontSize: Math.max(12, cellSize * 0.6),
+              fill: 0xFFD700,
+              fontWeight: 'bold'
+            });
+            text.anchor.set(0.5);
+            text.x = x + cellSize / 2;
+            text.y = y + cellSize / 2;
+            mapContainer.addChild(text);
+          }
+      } 
+      else if (aSym && state.terrainCache[aSym]) {
         let t = state.terrainCache[aSym];
         let terrain = new PIXI.Graphics();
         terrain.beginFill(t.color.replace('#', '0x'));
@@ -163,21 +246,35 @@ export function renderMap() {
   mapContainer.eventMode = 'static';
   mapContainer.on('pointerdown', async (e) => {
       e.stopPropagation(); 
-      
-      // 🎯 FIX: Use classList.contains() instead of strict equality!
-      if (!document.body.classList.contains('mode-play') || selectedUnitIndex === null) return;
+      if (!document.body.classList.contains('mode-play')) return;
       
       const pos = mapContainer.toLocal(e.global);
       const col = Math.floor(pos.x / cellSize);
       const row = Math.floor(pos.y / cellSize);
+      
+      if (state.setupMode === 'loot') {
+          let updatedMap = [...state.maps.ground];
+          updatedMap[row][col] = state.pendingSetup.objectiveSymbol;
+          await set(refs.groundMap, updatedMap);
+          
+          state.pendingSetup.objectivesRemaining -= 1;
+          
+          if (state.pendingSetup.objectivesRemaining <= 0) {
+              state.setupMode = null; 
+              await finalizeRoster(state.pendingSetup.scenarioData, state.pendingSetup.enemyCount);
+              showToast(`🎯 All objectives placed! Game Started!`);
+          } else {
+              showToast(`🎯 Objective placed. ${state.pendingSetup.objectivesRemaining} remaining...`);
+          }
+          return;
+      }
+      
+      if (selectedUnitIndex === null) return;
+      
       const targetCell = coordsToCell(col + 1, row + 1);
-
       const unit = state.roster[selectedUnitIndex];
       const startCell = unit[11];
-      
       if (startCell === targetCell) return; 
-
-      const dist = calculateDistance(startCell, targetCell);
       
       let maxDist = MOVEMENT_DB["run"].inches; 
       const isMounted = unit[21] === true || String(unit[21]).toUpperCase() === 'TRUE';
@@ -187,45 +284,11 @@ export function renderMap() {
       if (statusStr.includes("leg") || statusStr.includes("chest")) maxDist = MOVEMENT_DB["walk"].inches;
       if (statusStr.includes("belly")) maxDist = MOVEMENT_DB["crawl"].inches;
 
-      const sCoords = cellToCoords(startCell);
-      const tCoords = cellToCoords(targetCell);
-      const steps = Math.max(Math.abs(sCoords.x - tCoords.x), Math.abs(sCoords.y - tCoords.y));
-      
-      let isBlocked = false;
-      let terrainTax = 0;
+      // 🎯 Validate using the true pathfinder math
+      const reachableData = getReachableCells(startCell, maxDist);
 
-      for (let i = 1; i <= steps; i++) {
-          let t = i / steps;
-          let cx = Math.round(sCoords.x + t * (tCoords.x - sCoords.x));
-          let cy = Math.round(sCoords.y + t * (tCoords.y - sCoords.y));
-          
-          if (cy < 1 || cx < 1 || cy > state.maps.ground.length || cx > state.maps.ground[0].length) {
-              isBlocked = true; 
-              break;
-          }
-
-          let tile = state.maps.ground[cy-1][cx-1];
-          if (tile && state.terrainCache[tile]) {
-              let tData = state.terrainCache[tile];
-              
-              if (tData.blocksMove === true || String(tData.blocksMove).toUpperCase() === 'TRUE') {
-                  isBlocked = true;
-                  break;
-              }
-              
-              if (tData.moveTax) {
-                  terrainTax += Number(tData.moveTax);
-              }
-          }
-      }
-
-      if (isBlocked) {
-          showToast(`🚫 Move failed! Path blocked by solid terrain.`);
-          return;
-      }
-
-      if ((dist + terrainTax) > maxDist) {
-          showToast(`⚠️ Too far! Max move is ${maxDist}" (Cost: ${dist}" dist + ${terrainTax}" terrain tax)`);
+      if (!reachableData.cells.has(targetCell)) {
+          showToast(`🚫 Move failed! Tile is blocked or too far away.`);
           return;
       }
 
@@ -233,8 +296,8 @@ export function renderMap() {
       updatedRoster[selectedUnitIndex][11] = targetCell;
       await set(refs.roster, updatedRoster);
       
-      logAction(unit[0], 'MOVED', `Relocated to ${targetCell} (Cost: ${dist + terrainTax}")`);
-      
+      const actualCost = reachableData.costs.get(targetCell);
+      logAction(unit[0], 'MOVED', `Navigated to ${targetCell} (Cost: ${actualCost}")`);
       selectedUnitIndex = null; 
       renderTokens();
   });
@@ -254,15 +317,12 @@ export function renderTokens() {
   tokenContainer = new PIXI.Container();
   tokenContainer.name = 'tokens';
   
-  // 🎯 FIX: Use classList.contains() for the visualizer as well!
   if (selectedUnitIndex !== null && document.body.classList.contains('mode-play')) {
       const unit = state.roster[selectedUnitIndex];
       const startCell = unit[11];
       const elev = unit[23] || "Ground";
       
       if (elev.toLowerCase() === renderLayer.toLowerCase()) {
-          const sCoords = cellToCoords(startCell);
-          
           let maxDist = MOVEMENT_DB["run"].inches; 
           const isMounted = unit[21] === true || String(unit[21]).toUpperCase() === 'TRUE';
           const statusStr = String(unit[16] || "").toLowerCase();
@@ -278,48 +338,21 @@ export function renderTokens() {
           highlightGrid.beginFill(highlightColor, 0.15); 
           highlightGrid.lineStyle(1, highlightColor, 0.3);
 
-          const maxC = state.maps.ground[0].length;
-          const maxR = state.maps.ground.length;
-
-          for (let x = Math.max(1, sCoords.x - maxDist); x <= Math.min(maxC, sCoords.x + maxDist); x++) {
-              for (let y = Math.max(1, sCoords.y - maxDist); y <= Math.min(maxR, sCoords.y + maxDist); y++) {
-                  const tCell = coordsToCell(x, y);
-                  if (tCell === startCell) continue;
-
-                  const dist = calculateDistance(startCell, tCell);
-                  if (dist > maxDist) continue; 
-
-                  const steps = Math.max(Math.abs(sCoords.x - x), Math.abs(sCoords.y - y));
-                  let isBlocked = false;
-                  let terrainTax = 0;
-                  
-                  for (let i = 1; i <= steps; i++) {
-                      let t = i / steps;
-                      let cx = Math.round(sCoords.x + t * (x - sCoords.x));
-                      let cy = Math.round(sCoords.y + t * (y - sCoords.y));
-                      let tile = state.maps.ground[cy-1][cx-1];
-                      
-                      let tData = state.terrainCache[tile];
-                      if (tData) {
-                          if (tData.blocksMove === true || String(tData.blocksMove).toUpperCase() === 'TRUE') {
-                              isBlocked = true;
-                              break;
-                          }
-                          if (tData.moveTax) {
-                              terrainTax += Number(tData.moveTax);
-                          }
-                      }
-                  }
-
-                  if (!isBlocked && (dist + terrainTax) <= maxDist) {
-                      highlightGrid.drawRect((x - 1) * cellSize, (y - 1) * cellSize, cellSize, cellSize);
-                  }
-              }
-          }
+          // 🎯 Render the flooded pathfinder overlay
+          const reachableData = getReachableCells(startCell, maxDist);
+          
+          reachableData.cells.forEach(cell => {
+              if (cell === startCell) return;
+              const coords = cellToCoords(cell);
+              highlightGrid.drawRect((coords.x - 1) * cellSize, (coords.y - 1) * cellSize, cellSize, cellSize);
+          });
+          
           highlightGrid.endFill();
           tokenContainer.addChild(highlightGrid);
       }
   }
+
+  const livingPlayers = state.roster.slice(1).filter(u => String(u[15]).trim().toUpperCase() === "PLAYER" && Number(u[5]) > 0);
 
   for (let i = 1; i < state.roster.length; i++) {
     const row = state.roster[i];
@@ -329,6 +362,29 @@ export function renderTokens() {
     const elev = row[23] || "Ground";
     
     if (hp > 0 && pos && elev.toLowerCase() === renderLayer.toLowerCase()) {
+      
+      if (control === "AI" && livingPlayers.length > 0) {
+          let isVisible = false;
+          const targetIsMounted = row[21] === true || String(row[21]).toUpperCase() === 'TRUE';
+          
+          for (let p of livingPlayers) {
+              const pElev = p[23] || "Ground";
+              
+              // 🎯 FOG OF WAR FIX: Guarantee visibility if adjacent to prevent edge-clipping failures
+              if (calculateDistance(p[11], pos) <= 3) {
+                  isVisible = true;
+                  break;
+              }
+              
+              let losCheck = checkLOSAndCover(p[11], pElev, pos, elev, targetIsMounted);
+              if (!losCheck.blocked) {
+                  isVisible = true;
+                  break; 
+              }
+          }
+          if (!isVisible) continue; 
+      }
+
       const coords = cellToCoords(pos);
       if (!coords) continue;
       
@@ -376,8 +432,6 @@ export function renderTokens() {
       
       token.on('pointerdown', async (e) => {
         e.stopPropagation(); 
-        
-        // 🎯 FIX: Use classList.contains() here as well!
         if (document.body.classList.contains('mode-play')) {
             if (selectedUnitIndex !== null && selectedUnitIndex !== i) {
                 const attackerRow = state.roster[selectedUnitIndex];

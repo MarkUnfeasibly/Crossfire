@@ -1,8 +1,7 @@
 import { state } from './state.js';
 import { refs } from './firebase.js';
 import { set } from 'firebase/database';
-import { calculateDistance, checkLOSAndCover, getRangeCategory } from './engine_math.js';
-import { logAction, showToast } from './ui.js';
+import { calculateDistance, checkLOSAndCover, getRangeCategory, cellToCoords } from './engine_math.js'; 
 import { WEAPON_DB, DAMAGE_DB } from './data_tables.js'; // 🎯 New Data Tables
 
 window.EngineDiagnostics = window.EngineDiagnostics || {};
@@ -62,6 +61,23 @@ export async function applyWound(targetUnit, damageObj) {
 
   if (newHP <= 0) {
       row[16] = "KIA"; 
+      
+      // 🎯 THE LOOT DROP MECHANIC
+      const currentStatus = String(row[16] || "").toLowerCase();
+      if (currentStatus.includes("has loot")) {
+          const deathPos = row[11];
+          const coords = cellToCoords(deathPos);
+          
+          if (coords) {
+              let updatedMap = [...state.maps.ground];
+              updatedMap[coords.y - 1][coords.x - 1] = "$"; // Drop the Loot
+              await set(refs.groundMap, updatedMap);
+              
+              showToast(`💰 LOOT DROPPED! ${row[0]} dropped the loot at ${deathPos}!`);
+              logAction(row[0], `LOOT DROPPED`, `Dropped the objective at ${deathPos} upon death!`);
+          }
+      }
+      
       if (String(row[17]).includes("VIP")) {
           showToast(`💀 ASSASSINATION SUCCESSFUL! The VIP ${row[0]} has been killed!`);
       }

@@ -11,12 +11,11 @@ export const WEAPON_DB = {
     "shotgun": { pb: -4, short: 8, medium: 4, long: 0, extreme: null, cap: 2, h2h: "Club", isShoulder: true, isSidearm: false },
     "sawn-off shotgun": { pb: 0, short: 8, medium: 2, long: null, extreme: null, cap: 2, h2h: "Club", isShoulder: false, isSidearm: true },
     "thompson smg": { pb: 0, short: 6, medium: 0, long: -4, extreme: null, cap: 50, h2h: "Club", isShoulder: true, isSidearm: false },
-    "club": { pb: 2, short: null, medium: null, long: null, extreme: null, cap: null, h2h: "Club", isShoulder: false, isSidearm: false },
-    "knife": { pb: 3, short: 0, medium: null, long: null, extreme: null, cap: null, h2h: "Knife", isShoulder: false, isSidearm: true },
-    "unarmed": { pb: 0, short: null, medium: null, long: null, extreme: null, cap: null, h2h: "Unarmed", isShoulder: false, isSidearm: false }
+    "club": { pb: 2, short: 0, medium: null, long: null, extreme: null, cap: null, h2h: "Club", isShoulder: false, isSidearm: false },
+    "knife": { pb: 3, short: 0, medium: 0, long: 0, extreme: null, cap: null, h2h: "Knife", isShoulder: false, isSidearm: true },
+    "unarmed": { pb: 0, short: 0, medium: 0, long: 0, extreme: null, cap: null, h2h: "Unarmed", isShoulder: false, isSidearm: false }
 };
 
-// Rolls 1-20 determine the body part hit.
 export const DAMAGE_DB = [
     { min: 1, max: 1, loc: "HEAD", die: 20, lethal: true },
     { min: 2, max: 5, loc: "CHEST", die: 12, lethal: false },
@@ -28,7 +27,6 @@ export const DAMAGE_DB = [
     { min: 20, max: 20, loc: "GRAZE", die: 1, lethal: false }
 ];
 
-// Max inches a unit can move per turn
 export const MOVEMENT_DB = {
     "crawl": { inches: 2, mounted: false },
     "walk": { inches: 6, mounted: false },
@@ -36,4 +34,22 @@ export const MOVEMENT_DB = {
     "walking horse": { inches: 8, mounted: true },
     "trotting horse": { inches: 12, mounted: true },
     "cantering horse": { inches: 18, mounted: true }
+};
+
+export const SCENARIOS_DB = {
+    "Wild West": [
+        { name: "Main Street Shootout", objective: null, defaultTraits: "Brawler" },
+        { name: "Bank Heist", objective: "$", defaultTraits: "Robber" },
+        { name: "3:10 to Yuma (Escort)", objective: "*", defaultTraits: "Assassin" },
+        { name: "Jailbreak", objective: "?", defaultTraits: "Guard" },
+        { name: "Prey", objective: null, defaultTraits: "Xenomorph" } 
+    ],
+    "1920s Gangsters": [
+        { name: "Prohibition Shootout", objective: null, defaultTraits: "Marksman" },
+        { name: "Speakeasy Raid", objective: "$", defaultTraits: "Mobster, Full Auto" },
+        { name: "Prey", objective: null, defaultTraits: "Xenomorph" }
+    ],
+    "Beau Geste": [
+        { name: "Hold the Fort", objective: "*", defaultTraits: "Protector" }
+    ]
 };

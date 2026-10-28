@@ -6,7 +6,7 @@
   <title>CROSSFIRE VTT</title>
   <link href="https://fonts.googleapis.com/css2?family=Rye&family=Special+Elite&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
   <style>@import "https://fonts.googleapis.com/css2?family=Rye&family=Special+Elite&display=swap";:root{--bg-main:#15171e;--panel-bg:#222631;--text-main:#e2e8f0;--text-muted:#94a3b8;--border-subtle:#333a4a;--accent-primary:#c55a3f;--accent-secondary:#d4a373;--accent-highlight:#4a7c7c}body.theme-1920s{--accent-primary:#d4af37;--accent-secondary:#7a1c1c;--accent-highlight:#1b365d}body,html{background-color:var(--bg-main);width:100vw;height:100vh;color:var(--text-main);margin:0;padding:0;font-family:Special Elite,monospace;overflow:hidden}header{background-color:var(--panel-bg);color:var(--text-main);border-bottom:3px solid var(--accent-primary);box-sizing:border-box;flex-shrink:0;justify-content:space-between;align-items:center;height:50px;padding:10px 20px;display:flex}header h1{letter-spacing:1px;color:var(--text-main);margin:0;font-family:Rye,cursive;font-size:24px}header h1 span{color:var(--accent-primary)}#vtt-view{flex-direction:column;height:100vh;display:flex}.main{flex:1;display:flex;overflow:hidden}.sidebar{background-color:var(--panel-bg);border-right:2px solid var(--border-subtle);flex-direction:column;flex-shrink:0;width:300px;display:flex;overflow-y:auto}.sidebar.right{border-right:none;border-left:2px solid var(--border-subtle)}.sidebar-section{background-color:var(--border-subtle);color:var(--text-main);z-index:10;margin-bottom:10px;padding:8px 15px;font-family:Rye,cursive;font-size:16px;position:sticky;top:0}.map-area{flex-direction:column;flex:1;display:flex;position:relative;overflow:hidden}.map-toolbar{background-color:var(--panel-bg);border-bottom:2px solid var(--border-subtle);flex-wrap:wrap;flex-shrink:0;align-items:center;gap:15px;padding:10px;display:flex}.canvas-wrapper{cursor:crosshair;background-color:#0f1115;background-image:linear-gradient(#ffffff08 1px,#0000 1px),linear-gradient(90deg,#ffffff08 1px,#0000 1px);background-position:-1px -1px;background-size:40px 40px;flex:1;padding:20px;overflow:auto}canvas{border:2px solid var(--border-subtle);margin:0;display:block;box-shadow:10px 10px 30px #00000080}.btn{border:2px solid var(--text-muted);color:var(--text-muted);cursor:pointer;text-transform:uppercase;background:0 0;border-radius:2px;padding:6px 12px;font-family:Special Elite,monospace;font-size:12px;font-weight:700;transition:all .1s}.btn:hover{background:var(--text-muted);color:var(--bg-main)}.btn-rust{border-color:var(--accent-primary);color:var(--accent-primary)}.btn-rust:hover{background:var(--accent-primary);color:var(--bg-main)}.btn-gold{border-color:var(--accent-secondary);color:var(--accent-secondary)}.btn-gold:hover{background:var(--accent-secondary);color:var(--bg-main)}.btn-sage{border-color:var(--accent-highlight);color:var(--accent-highlight)}.btn-sage:hover{background:var(--accent-highlight);color:var(--bg-main)}.layer-toggle{border:2px solid var(--text-muted);border-radius:2px;display:flex;overflow:hidden}.layer-toggle button{cursor:pointer;color:var(--text-muted);background:0 0;border:none;padding:6px 15px;font-family:Special Elite,monospace;font-weight:700;transition:all .1s}.layer-toggle button.active{background:var(--text-muted);color:var(--bg-main)}.terrain-palette{grid-template-columns:repeat(3,1fr);gap:5px;padding:0 10px 10px;display:grid}.terrain-tile{border:2px solid var(--border-subtle);background:var(--bg-main);color:var(--text-main);cursor:pointer;text-align:center;border-radius:4px;flex-direction:column;justify-content:center;align-items:center;height:50px;font-size:10px;transition:all .1s;display:flex}.terrain-tile.active{border-color:var(--accent-primary);outline:2px solid var(--accent-primary);background:var(--panel-bg)}.terrain-tile .sym{margin-bottom:2px;font-size:14px;font-weight:700}.tool-btn{border:2px solid var(--border-subtle);color:var(--text-main);cursor:pointer;text-transform:uppercase;background:0 0;border-radius:4px;margin:0 10px 5px;padding:8px;font-family:Special Elite,monospace;font-size:12px;font-weight:700;transition:all .1s}.tool-btn:hover,.tool-btn.active{background:var(--text-muted);color:var(--bg-main);border-color:var(--text-muted)}.info-row{color:var(--text-main);justify-content:space-between;padding:5px 15px;font-family:Special Elite,monospace;font-size:13px;display:flex}.info-row span:last-child{color:var(--accent-secondary);font-weight:700}body.mode-menu #vtt-view{display:none}body.mode-menu #main-menu-view{background:var(--bg-main);justify-content:center;align-items:center;height:100vh;display:flex}body.mode-play #main-menu-view,body.mode-edit #main-menu-view{display:none}body.mode-play .edit-only,body.mode-edit .play-only{display:none!important}.menu-box{text-align:center;border:2px solid var(--border-subtle);background:var(--panel-bg);border-radius:8px;padding:40px;box-shadow:0 10px 30px #00000080}.menu-box h1{color:var(--text-main);margin:0;font-family:Rye,cursive;font-size:64px}.menu-box h1 span{color:var(--accent-primary)}.menu-box p{letter-spacing:4px;color:var(--text-muted);margin-top:0;margin-bottom:30px;font-family:Special Elite,monospace;font-weight:700}.menu-btn{border:2px solid var(--border-subtle);width:100%;color:var(--text-main);background:var(--bg-main);cursor:pointer;border-radius:4px;margin:10px 0;padding:15px;font-family:Special Elite,monospace;font-size:18px;font-weight:700;transition:all .2s;display:block}.menu-btn:hover{background:var(--accent-primary);border-color:var(--accent-primary);color:var(--bg-main)}.modal-overlay{-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);background:#0f1115cc!important}.modal{border-radius:8px;background:var(--panel-bg)!important;border:2px solid var(--border-subtle)!important;color:var(--text-main)!important;box-shadow:0 10px 40px #0009!important}.modal select,.modal input{border-radius:4px;background:var(--bg-main)!important;border:1px solid var(--border-subtle)!important;color:var(--text-main)!important}.toast{background:var(--accent-highlight);color:var(--bg-main);opacity:0;pointer-events:none;z-index:1000;border-radius:4px;padding:10px 20px;font-family:Special Elite,monospace;font-weight:700;transition:opacity .3s;position:fixed;bottom:20px;left:50%;transform:translate(-50%);box-shadow:0 4px 15px #00000080}.toast.show{opacity:1}</style>
-  <script type="module" crossorigin src="/assets/index-B0hV-jJ2.js"></script>
+  <script type="module" crossorigin src="/assets/index-aKVoFOOl.js"></script>
 </head>
 
 <body class="mode-menu">
@@ -160,26 +160,44 @@
   <div class="modal-overlay" id="wizardModal" style="display:none; position:fixed; inset:0; background:rgba(44,30,22,0.8); align-items:center; justify-content:center; z-index:100;">
     <div class="modal" style="background:var(--paper-bg); border:4px double var(--ink-main); padding:30px; max-width:450px; width:90%;">
       <h2 style="font-family:'Rye'; margin-bottom:20px;">🚀 SETUP WIZARD</h2>
+      
+      <!-- 🎯 NEW: Cascading Era Selection -->
       <label style="display:block; margin-bottom:10px; font-family:'Special Elite'; font-size:14px;">
-        Scenario:
-        <select id="wiz-scenario" style="width:100%; padding:8px; margin-top:5px; background:white; border:1px solid var(--ink-main);">
-          <option value="Shootout">Main Street Shootout</option>
-          <option value="Heist">The Bank Job</option>
-          <option value="Heist">Jailbreak</option>
-          <option value="Heist">Escort - 3:10 to Yuma</option>
-          <option value="Heist">Prey</option>
+        Era:
+        <select id="wiz-era" style="width:100%; padding:8px; margin-top:5px; background:white; border:1px solid var(--ink-main);">
+          <option value="">-- Select Era --</option>
+          <option value="Wild West">Wild West (1880s)</option>
+          <option value="1920s Gangsters">1920s Gangsters</option>
+          <option value="Beau Geste">Beau Geste</option>
         </select>
       </label>
+
+      <!-- Scenario Dropdown (Populated Dynamically) -->
+      <label style="display:block; margin-bottom:10px; font-family:'Special Elite'; font-size:14px;">
+        Scenario:
+        <select id="wiz-scenario" style="width:100%; padding:8px; margin-top:5px; background:white; border:1px solid var(--ink-main);" disabled>
+          <option value="">-- Select Era First --</option>
+        </select>
+      </label>
+
+      <!-- 🎯 NEW: Dynamic Objective Count -->
+      <label id="wiz-obj-container" style="display:none; margin-bottom:10px; font-family:'Special Elite'; font-size:14px;">
+        Number of Objectives:
+        <input type="number" id="wiz-obj-count" value="1" min="1" max="5" style="width:100%; padding:8px; margin-top:5px; background:white; border:1px solid var(--ink-main);">
+      </label>
+
       <label style="display:block; margin-bottom:10px; font-family:'Special Elite'; font-size:14px;">
         Select Map:
         <select id="wiz-map" style="width:100%; padding:8px; margin-top:5px; background:white; border:1px solid var(--ink-main);">
           <option value="">Loading maps...</option>
         </select>
       </label>
+
       <label style="display:block; margin-bottom:20px; font-family:'Special Elite'; font-size:14px;">
         AI Thugs to Spawn:
         <input type="number" id="wiz-enemies" value="4" min="1" max="10" style="width:100%; padding:8px; margin-top:5px; background:white; border:1px solid var(--ink-main);">
       </label>
+
       <div style="display:flex; gap:10px; justify-content:flex-end;">
         <button class="btn btn-rust" id="btn-wizard-start">Launch Game</button>
         <button class="btn" onclick="document.getElementById('wizardModal').style.display='none'">Cancel</button>
